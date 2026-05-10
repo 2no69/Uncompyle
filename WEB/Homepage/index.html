@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Uncompyle</title>
+	<link rel="stylesheet" href="./style.css">
+
+	<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <script type="importmap">
+        {
+        "imports": {
+            "@material/web/": "https://esm.run/@material/web/"
+        }
+        }
+    </script>
+    <script type="module">
+        import '@material/web/all.js';
+        import {styles as typescaleStyles} from '@material/web/typography/md-typescale-styles.js';
+
+        document.adoptedStyleSheets.push(typescaleStyles.styleSheet);
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+
+	
+</head>
+<body>
+
+	<div id="loading" class="loading-box">
+		<md-circular-progress class="Loader" indeterminate></md-circular-progress>
+		<h1 id="loading_text" class="loader-text">Uploading file...</h1>
+	</div>
+
+	<div class="Uncompyle-HomePage">
+		<h1>Uncompyle</h1>
+		<p>The most practical tool for viewing compiled Python scripts.</p>
+
+		<div id="dropzone">
+			<p>Drop yout compiled .exe file here</p>
+			<p>or click for select</p>
+			<input type="file" id="fileInput" accept=".exe" hidden>
+		</div>
+  	</div>
+
+	<script type="module" src="./main.js"></script>
+</body>
+</html>

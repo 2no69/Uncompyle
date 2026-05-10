@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Explorateur</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <script type="importmap">
+        {
+        "imports": {
+            "@material/web/": "https://esm.run/@material/web/"
+        }
+        }
+    </script>
+    <script type="module">
+        import '@material/web/all.js';
+        import {styles as typescaleStyles} from '@material/web/typography/md-typescale-styles.js';
+
+        document.adoptedStyleSheets.push(typescaleStyles.styleSheet);
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+
+    <link rel="stylesheet" href="ArchiveEditor.css">
+</head>
+<body>
+
+    <div id="decompiling" class="loading-box">
+		<md-circular-progress class="Loader" indeterminate></md-circular-progress>
+		<h1 id="loading_text" class="loader-text">Decompiling...</h1>
+	</div>
+
+    <div class="ArchiveEditor">
+        <div class="FileExplorer">
+            <div id="tree"></div>
+        </div>
+        <div class="ide">
+            <div id="editor"></div>
+            <div class="pyc-file-message" id="pyc-msg">
+                <h1 class="pyc-msg-title">This file can be decompiled</h1>
+                <md-filled-button class="Decompile-pyc-btn" id="DecompilePycBtn" onclick='decompileFile(getIdFromURL(), getCurrentFilePath());'>Uncompile</md-filled-button>
+                <md-circular-progress id="decompilationLoader" class="Decompilation-Loader" indeterminate></md-circular-progress>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        function getIdFromURL() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get("id");
+        }
+
+        const Backend_URL = "ENTER YOUR BACKEND URL HERE"
+
+        async function loadData(host, id) {
+
+            if (!id) {
+                document.getElementById("tree").textContent = "Pas d'ID";
+                return;
+            }
+
+            try {
+                const res = await fetch(host + '/id/' + id);
+                
+                if (!res.ok) throw new Error("HTTP " + res.status);
+
+                const data = await res.json();
+
+                console.log("DATA:", data); // 🔥 DEBUG
+
+                buildTree(data.tree, document.getElementById("tree"), host);
+
+            } catch (err) {
+                console.error(err);
+                document.getElementById("tree").textContent = "Erreur chargement";
+            }
+        }
+
+        function buildTree(nodes, container, host, basePath = "") {
+        nodes.forEach(node => {
+            const el = document.createElement("div");
+
+            const currentPath = basePath + "/" + node.name;
+
+            if (node.type === "folder") {
+                el.textContent = "📁 " + node.name;
+                el.className = "folder";
+
+                const childrenContainer = document.createElement("div");
+                childrenContainer.className = "children";
+
+                if (node.children) {
+                    buildTree(node.children, childrenContainer, host, currentPath);
+                }
+
+                el.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    el.classList.toggle("open");
+                });
+
+                el.appendChild(childrenContainer);
+            }
+
+            if (node.type === "file") {
+                el.textContent = "📄 " + node.name;
+                el.className = "file";
+
+                el.addEventListener("click", async (e) => {
+                    e.stopPropagation();
+                    await openFile(currentPath, host);
+                });
+            }
+
+            container.appendChild(el);
+        });
+        }
+
+
+        async function openFile(filePath, host) {
+        const id = getIdFromURL();
+
+        selectedFile = filePath;
+
+        try {
+            const res = await fetch(
+            `${host}/file/${id}/${encodeURIComponent(filePath)}`
+            );
+
+            const data = await res.json();
+
+            if (!res.ok || data.error) {
+            console.error(data.error || "Fetch failed");
+            return;
+            }
+
+            const pyc_msg = document.getElementById("pyc-msg");
+            const editorDiv = document.getElementById("editor");
+            const DecompyleBTN = document.getElementById("DecompilePycBtn");
+            const Loader = document.getElementById("decompilationLoader");
+
+            if (data.type === "pyc") {
+                pyc_msg.style.display = "flex";
+                editorDiv.style.display = "none";
+
+                DecompyleBTN.style.display = "flex";
+                Loader.style.display = "none";
+            } else {
+                pyc_msg.style.display = "none";
+                editorDiv.style.display = "flex";
+                openPopup(data.filename, data.content ?? "");
+            }
+
+            window.currentFileMeta = data;
+
+            currentFile = {
+                path: filePath,
+            };
+
+            console.log("Fichier courant :", currentFile);
+
+        } catch (err) {
+            console.error("Fetch error:", err);
+        }
+        }
+
+        function openPopup(filename, code) {
+            loadMonaco(filename, code);
+        }
+
+
+
+        function getLanguage(filename) {
+        if (filename.endsWith(".py")) return "python";
+        if (filename.endsWith(".pyc")) return "plaintext";
+        return "plaintext";
+        }
+
+        function loadMonaco(filename, code) {
+        require(["vs/editor/editor.main"], function () {
+
+            // SAFE CHECK
+            if (editor && typeof editor.dispose === "function") {
+            editor.dispose();
+            }
+
+            editor = monaco.editor.create(
+            document.getElementById("editor"),
+            {
+                value: code || "",
+                language: getLanguage(filename),
+                theme: "vs-dark",
+                automaticLayout: true
+            }
+            );
+        });
+        }
+
+        async function decompileFile(id, filename) {
+            
+            const Loader = document.getElementById("decompiling");
+            Loader.style.display = "flex";
+
+            try {
+                const response = await fetch(`${Backend_URL}/decompile/id/${id}/${filename}`, {
+                    method: "POST"
+                });
+
+                const result = await response.text();
+                Loader.style.display = "none";
+                document.getElementById("tree").innerHTML = "";
+                loadData(Backend_URL, id)
+                console.log("Résultat :", result);
+            } catch (error) {
+                console.error("Erreur :", error);
+            }
+        }
+
+        function getCurrentFile() {
+            return currentFile;
+        }
+
+        function getCurrentFilePath() {
+            return currentFile.path;
+        }
+
+        
+        function ShowUncompilerLoader() {
+            
+        }
+
+        let currentFile = {
+            path: null,
+        };
+
+        let editor = null;
+
+
+        require.config({
+            paths: {
+                vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs"
+            }
+        });
+
+        window.addEventListener("DOMContentLoaded", () => {
+            loadData(Backend_URL, getIdFromURL());
+        });
+    </script>
+    <script>
+        window.require.config({
+            paths: {
+            vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs"
+            }
+        });
+    </script>
+
+
+</body>
+
+</html>
